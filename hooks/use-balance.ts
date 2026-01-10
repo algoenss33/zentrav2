@@ -39,8 +39,22 @@ export function useBalance() {
         .order('token', { ascending: true })
 
       if (error) {
-        if (error.code !== 'PGRST116' && error.message !== 'cancelled') {
-          console.warn('Error loading balances:', error.message)
+        // Ignore specific errors that are expected or not critical
+        const errorStatus = (error as any).status
+        const isIgnorableError = 
+          error.code === 'PGRST116' || // Not found (expected for new users)
+          error.message === 'cancelled' || // Request cancelled (expected during cleanup)
+          errorStatus === 406 || // Not Acceptable (header issue, but data might still be valid)
+          errorStatus === 409; // Conflict (handled elsewhere, don't spam console)
+        
+        if (!isIgnorableError) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Error loading balances:', {
+              message: error.message,
+              code: error.code,
+              status: errorStatus,
+            })
+          }
         }
         // Jangan blok UI terlalu lama: hentikan loading dan biarkan balance lama tetap tampil.
         // Don't clear existing balances on error - keep showing them
@@ -53,7 +67,8 @@ export function useBalance() {
       if (data && Array.isArray(data)) {
         // Ensure all required tokens exist - create missing ones
         const requiredTokens = ['ZENTRA', 'BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'BNB']
-        const existingTokens = new Set(data.map(b => b.token))
+        const balancesData = data as Balance[]
+        const existingTokens = new Set(balancesData.map(b => b.token))
         const missingTokens = requiredTokens.filter(token => !existingTokens.has(token))
         
         // Create missing token balances in background (non-blocking)
@@ -62,19 +77,34 @@ export function useBalance() {
           isCreatingMissingBalances.current = true
           
           // Don't await - create in background to not block UI
+          // Use upsert instead of insert to handle race conditions gracefully
           Promise.all(
-            missingTokens.map(token =>
+            missingTokens.map((token: string) =>
               supabase
                 .from('balances')
-                .insert({
+                .upsert({
                   user_id: user.id,
                   token,
                   balance: 0,
+                } as any, {
+                  onConflict: 'user_id,token', // Handle conflicts on unique constraint
+                  ignoreDuplicates: false, // Update if exists, insert if not
                 })
-                .then(({ error: insertError }) => {
-                  if (insertError && insertError.code !== '23505') { // Ignore duplicate key errors
-                    if (process.env.NODE_ENV === 'development') {
-                      console.warn(`Failed to create balance for ${token}:`, insertError.message)
+                .then(({ error: upsertError }) => {
+                  // Ignore duplicate key errors (23505) and conflict errors (409)
+                  if (upsertError) {
+                    const errorStatus = (upsertError as any).status
+                    const isConflictError = 
+                      upsertError.code === '23505' || // PostgreSQL duplicate key
+                      upsertError.code === 'PGRST204' || // PostgREST conflict
+                      errorStatus === 409 || // HTTP conflict
+                      upsertError.message?.includes('duplicate') ||
+                      upsertError.message?.includes('conflict');
+                    
+                    if (!isConflictError) {
+                      if (process.env.NODE_ENV === 'development') {
+                        console.warn(`Failed to create balance for ${token}:`, upsertError.message)
+                      }
                     }
                   }
                 })

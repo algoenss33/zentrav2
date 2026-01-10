@@ -123,6 +123,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single()
 
       if (error) {
+        // Check error status for HTTP errors
+        const errorStatus = (error as any).status
+        
         // Check if it's a "not found" error
         const isNotFound = 
           error.code === 'PGRST116' || 
@@ -131,7 +134,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error.message?.toLowerCase().includes('not found') ||
           error.message?.toLowerCase().includes('does not exist')
 
+        // Check if it's an ignorable error (406 = Not Acceptable, usually header issue but data might still be valid)
+        const isIgnorableError = 
+          errorStatus === 406 || // Not Acceptable (header issue, but might still work)
+          errorStatus === 409; // Conflict (handled elsewhere)
+
         if (isNotFound) {
+          setProfile(null)
+          setLoading(false)
+          return
+        }
+
+        // For ignorable errors, silently continue (don't spam console)
+        if (isIgnorableError) {
           setProfile(null)
           setLoading(false)
           return
@@ -139,7 +154,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // For other errors, log but don't block UI
         if (process.env.NODE_ENV === 'development') {
-          console.warn('Error loading profile:', error.message || error.code)
+          console.warn('Error loading profile:', {
+            message: error.message,
+            code: error.code,
+            status: errorStatus,
+          })
         }
         setProfile(null)
         setLoading(false)
@@ -283,27 +302,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const zentraAmount = 32
       const zentraUsdValue = zentraAmount * zentraPrice
 
-      // Create balance for Zentra token
-      await supabase
+      // Create balance for Zentra token using upsert to handle race conditions
+      const { error: zentraError } = await supabase
         .from('balances')
-        .insert({
+        .upsert({
           user_id: authData.user.id,
           token: 'ZENTRA',
           balance: zentraAmount,
+        }, {
+          onConflict: 'user_id,token',
+          ignoreDuplicates: false,
         })
+      
+      // Ignore conflict errors during signup (shouldn't happen, but handle gracefully)
+      if (zentraError && zentraError.status !== 409 && zentraError.code !== '23505') {
+        throw zentraError
+      }
 
-      // Create initial balances for other tokens (0 balance)
+      // Create initial balances for other tokens (0 balance) using upsert
       // Include all supported tokens: BTC, ETH, USDT, USDC, SOL, BNB
       const otherTokens = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'BNB']
-      for (const token of otherTokens) {
-        await supabase
-          .from('balances')
-          .insert({
-            user_id: authData.user.id,
-            token,
-            balance: 0,
-          })
-      }
+      await Promise.all(
+        otherTokens.map(token =>
+          supabase
+            .from('balances')
+            .upsert({
+              user_id: authData.user.id,
+              token,
+              balance: 0,
+            }, {
+              onConflict: 'user_id,token',
+              ignoreDuplicates: false,
+            })
+            .then(({ error }) => {
+              // Ignore conflict errors (shouldn't happen during signup, but handle gracefully)
+              const errorStatus = (error as any)?.status
+              if (error && errorStatus !== 409 && error.code !== '23505') {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn(`Failed to create balance for ${token}:`, error.message)
+                }
+              }
+            })
+        )
+      )
 
       // Create transaction record for welcome bonus
       await supabase

@@ -10,27 +10,51 @@ type Balance = Database['public']['Tables']['balances']['Row']
 const ZENTRA_PRICE = 0.5 // $0.5 per Zentra token
 
 export function useBalance() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth() // Get auth loading state
   const [balances, setBalances] = useState<Balance[]>([])
   const [loading, setLoading] = useState(false) // Start with false - don't block UI
   const userIdRef = useRef<string | null>(null) // Track user ID to prevent unnecessary clears
   const userRef = useRef(user) // Keep current user reference to avoid stale closures
+  const authLoadingRef = useRef(authLoading) // Keep auth loading state to avoid stale closures
   const isCreatingMissingBalances = useRef<boolean>(false) // Prevent infinite loop when creating missing balances
   const lastLoadTimeRef = useRef<number>(0) // Track last successful load time for retry logic
+  const hasLoadedOnceRef = useRef<boolean>(false) // Track if we've loaded balance at least once
 
-  // Update user ref whenever user changes
+  // Update refs whenever they change
   useEffect(() => {
     userRef.current = user
-  }, [user])
+    authLoadingRef.current = authLoading
+  }, [user, authLoading])
 
   // Stabilized loadBalances with useCallback to avoid unnecessary effect reruns.
   // Uses userRef to always get latest user, avoiding stale closure issues in production.
   const loadBalances = useCallback(async (showLoading: boolean = false, retryCount: number = 0) => {
     const currentUser = userRef.current
+    
+    // CRITICAL FIX: Don't clear balance if auth is still loading (prevent clear on refresh)
+    // Only clear if we're sure there's no user (auth loading complete and no user)
+    const isAuthLoading = authLoadingRef.current
     if (!currentUser) {
-      // If no user, clear balances only if we had a user before
-      if (userIdRef.current !== null) {
+      // Only clear balances if auth loading is complete and we had a user before
+      // This prevents clearing balance during page refresh when auth is still loading
+      if (!isAuthLoading && userIdRef.current !== null) {
+        console.log('🧹 Clearing balances - no user and auth loading complete')
         setBalances([])
+        userIdRef.current = null
+        hasLoadedOnceRef.current = false
+      }
+      return
+    }
+
+    // CRITICAL FIX: Wait for auth to finish loading before loading balance
+    // This prevents race condition on page refresh
+    if (isAuthLoading) {
+      console.log('⏳ Waiting for auth to finish loading...')
+      // Wait a bit and retry
+      if (retryCount < 5) {
+        setTimeout(() => {
+          loadBalances(showLoading, retryCount + 1)
+        }, 500)
       }
       return
     }
@@ -57,19 +81,32 @@ export function useBalance() {
         
         if (!isIgnorableError) {
           // Log errors in production for debugging
-          console.warn('Error loading balances:', {
+          console.error('❌ Error loading balances:', {
             message: error.message,
             code: error.code,
             status: errorStatus,
             retryCount,
+            userId: currentUser.id,
+            hasExistingBalance: balances.length > 0,
           })
           
-          // Retry logic for production: retry up to 2 times with exponential backoff
-          if (retryCount < 2 && !isIgnorableError) {
-            const delay = Math.min(1000 * Math.pow(2, retryCount), 3000)
+          // CRITICAL FIX: More aggressive retry for production, especially after refresh
+          // Retry up to 3 times with exponential backoff
+          if (retryCount < 3) {
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 5000)
+            console.log(`🔄 Retrying balance load in ${delay}ms (attempt ${retryCount + 1}/3)`)
             setTimeout(() => {
               loadBalances(showLoading, retryCount + 1)
             }, delay)
+            return
+          }
+          
+          // If all retries failed and we have existing balance, keep it (don't clear)
+          if (balances.length > 0 && hasLoadedOnceRef.current) {
+            console.warn('⚠️ Failed to reload balance, keeping existing balance data')
+            if (showLoading) {
+              setLoading(false)
+            }
             return
           }
         }
@@ -81,8 +118,9 @@ export function useBalance() {
         return
       }
 
-      // Mark successful load time
+      // Mark successful load time and flag that we've loaded at least once
       lastLoadTimeRef.current = Date.now()
+      hasLoadedOnceRef.current = true
 
       if (data && Array.isArray(data)) {
         // Ensure all required tokens exist - create missing ones
@@ -190,12 +228,22 @@ export function useBalance() {
   }, []) // Empty deps - use userRef instead to avoid stale closures
 
   useEffect(() => {
+    // CRITICAL FIX: Wait for auth to finish loading before doing anything
+    // This prevents clearing balance on page refresh when auth is still loading
+    if (authLoading) {
+      console.log('⏳ Auth still loading, waiting...')
+      return
+    }
+
     if (!user) {
-      // Only clear balances when user becomes null
+      // Only clear balances when user becomes null AND auth loading is complete
+      // This prevents clearing during page refresh
       if (userIdRef.current !== null) {
+        console.log('🧹 User logged out, clearing balances')
         setBalances([])
         setLoading(false)
         userIdRef.current = null
+        hasLoadedOnceRef.current = false
       }
       return
     }
@@ -207,14 +255,20 @@ export function useBalance() {
     // CRITICAL FIX: Only clear balances if this is a different user
     // Never clear balances for the same user - this prevents balance from becoming 0
     if (!isSameUser) {
+      console.log('👤 Different user detected, will load new balances')
       // Different user - but don't clear immediately to prevent flash of 0 balance
       // Balance will be replaced when new data loads
       setLoading(true)
+      hasLoadedOnceRef.current = false // Reset flag for new user
     }
 
     // CRITICAL FIX: Always load balances, but don't clear existing ones
     // This ensures balance is always up-to-date without causing it to flash to 0
-    loadBalances()
+    // Only load if auth is not loading to prevent race conditions
+    if (!authLoading) {
+      console.log('🔄 Loading balances for user:', user.id)
+      loadBalances()
+    }
 
     // Subscribe to real-time updates with error handling
     let channel: ReturnType<typeof supabase.channel> | null = null
@@ -387,7 +441,7 @@ export function useBalance() {
         window.removeEventListener('balance-updated', handleBalanceUpdate)
       }
     }
-  }, [user, loadBalances]) // Include loadBalances in deps - it's now stable with empty deps
+  }, [user, authLoading, loadBalances]) // Include authLoading to wait for auth ready
 
   const getBalance = (token: string): number => {
     const balance = balances.find(b => b.token === token)

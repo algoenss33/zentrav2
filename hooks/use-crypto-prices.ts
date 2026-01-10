@@ -49,6 +49,50 @@ const FALLBACK_PRICES: Record<string, { price: number; change24h: number }> = {
   SOL: { price: 150, change24h: 3.2 },
 }
 
+// Cache key for localStorage
+const CACHE_KEY = 'zentra_crypto_prices_cache'
+const CACHE_TIMESTAMP_KEY = 'zentra_crypto_prices_cache_timestamp'
+const CACHE_DURATION_MS = 300000 // Cache valid for 5 minutes
+
+// Save prices to localStorage cache
+function savePricesToCache(prices: CryptoPrices) {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(prices))
+      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString())
+    }
+  } catch (error) {
+    console.warn('Failed to save prices to cache:', error)
+  }
+}
+
+// Load prices from localStorage cache
+function loadPricesFromCache(): CryptoPrices | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const cachedData = localStorage.getItem(CACHE_KEY)
+      const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY)
+      
+      if (cachedData && cachedTimestamp) {
+        const timestamp = parseInt(cachedTimestamp, 10)
+        const now = Date.now()
+        
+        // Return cached prices if still valid (within cache duration)
+        if (now - timestamp < CACHE_DURATION_MS) {
+          const prices = JSON.parse(cachedData) as CryptoPrices
+          // Validate cached prices structure
+          if (prices && typeof prices === 'object') {
+            return prices
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load prices from cache:', error)
+  }
+  return null
+}
+
 // API URLs
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3/simple/price'
 const COINCAP_API_URL = 'https://api.coincap.io/v2/assets'
@@ -344,8 +388,27 @@ function mergePrices(...priceSources: (CryptoPrices | null)[]): CryptoPrices {
 }
 
 export function useCryptoPrices() {
-  const [prices, setPrices] = useState<CryptoPrices>({})
-  const [loading, setLoading] = useState(true)
+  // Initialize with cached prices immediately to prevent empty state on refresh
+  const [prices, setPrices] = useState<CryptoPrices>(() => {
+    const cached = loadPricesFromCache()
+    if (cached && Object.keys(cached).length > 0) {
+      return cached
+    }
+    // If no cache, use fallback prices immediately
+    const initialPrices: CryptoPrices = {}
+    Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
+      const fallback = FALLBACK_PRICES[symbol]
+      if (fallback) {
+        initialPrices[symbol] = {
+          price: fallback.price,
+          change24h: fallback.change24h,
+          lastUpdated: new Date().toISOString(),
+        }
+      }
+    })
+    return initialPrices
+  })
+  const [loading, setLoading] = useState(false) // Start with false since we have cached/fallback prices
   const [error, setError] = useState<string | null>(null)
   const lastFetchTime = useRef<number>(0)
   const isFetching = useRef<boolean>(false) // Prevent multiple simultaneous fetches
@@ -357,10 +420,16 @@ export function useCryptoPrices() {
       return
     }
 
-    // Check cache
+    // Check cache duration - but always allow refresh if explicitly called
     const now = Date.now()
-    if (now - lastFetchTime.current < CACHE_DURATION && Object.keys(prices).length > 0) {
-      return
+    const pricesRef = prices // Capture current prices for comparison
+    if (now - lastFetchTime.current < CACHE_DURATION && Object.keys(pricesRef).length > 0) {
+      // Still refresh if we only have fallback prices (no API prices in cache)
+      const cached = loadPricesFromCache()
+      const hasRealAPIPrices = cached && Object.keys(cached).length > 0
+      if (hasRealAPIPrices) {
+        return // Skip if we have recent cache and it contains API prices
+      }
     }
 
     isFetching.current = true
@@ -405,9 +474,6 @@ export function useCryptoPrices() {
       if (coingeckoPrices.status === 'fulfilled' && coingeckoPrices.value) {
         priceSources.push(coingeckoPrices.value)
       }
-      if (coincapPrices.status === 'fulfilled' && coincapPrices.value) {
-        priceSources.push(coincapPrices.value)
-      }
       if (binancePrices.status === 'fulfilled' && binancePrices.value) {
         priceSources.push(binancePrices.value)
       }
@@ -415,67 +481,132 @@ export function useCryptoPrices() {
       // Merge prices from all sources
       const mergedPrices = mergePrices(...priceSources)
 
-      // Fill missing prices with fallback - ensure ALL symbols have prices
+      // Get cached prices as backup
+      const cachedPrices = loadPricesFromCache() || {}
+      
+      // Fill missing prices - first try cached prices, then fallback
       const finalPrices: CryptoPrices = { ...mergedPrices }
       Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
         if (!finalPrices[symbol] || finalPrices[symbol].price === 0 || isNaN(finalPrices[symbol].price)) {
-          const fallback = FALLBACK_PRICES[symbol]
-          if (fallback) {
+          // First try to use cached price (last successful API price)
+          const cachedPrice = cachedPrices[symbol]
+          if (cachedPrice && cachedPrice.price > 0 && !isNaN(cachedPrice.price)) {
             finalPrices[symbol] = {
-              price: fallback.price,
-              change24h: fallback.change24h,
-              lastUpdated: new Date().toISOString(),
+              ...cachedPrice,
+              lastUpdated: cachedPrice.lastUpdated || new Date().toISOString(),
             }
-            // Only log if we're actually using fallback (not initial load)
-            if (Object.keys(prices).length > 0) {
-              console.warn(`⚠️ ${symbol} using fallback price: $${fallback.price}`)
+            // Only log if we're using cached price (not initial load)
+            if (Object.keys(prices).length > 0 && prices[symbol]?.price !== cachedPrice.price) {
+              console.log(`📦 ${symbol} using cached price: $${cachedPrice.price}`)
+            }
+          } else {
+            // If no cached price, use fallback
+            const fallback = FALLBACK_PRICES[symbol]
+            if (fallback) {
+              finalPrices[symbol] = {
+                price: fallback.price,
+                change24h: fallback.change24h,
+                lastUpdated: new Date().toISOString(),
+              }
+              // Only log if we're actually using fallback (not initial load)
+              if (Object.keys(prices).length > 0) {
+                console.warn(`⚠️ ${symbol} using fallback price: $${fallback.price}`)
+              }
             }
           }
         }
       })
 
+      // Save final prices to cache (always save, even if some came from cache/fallback)
+      // This ensures we always have a fresh cache with all symbols
+      savePricesToCache(finalPrices)
+      if (Object.keys(mergedPrices).length > 0) {
+        console.log('✅ New API prices fetched and saved to cache')
+      } else {
+        console.log('📦 Using cached/fallback prices (API unavailable)')
+      }
+
       // Always ensure we have prices for all symbols
       setPrices(finalPrices)
       lastFetchTime.current = now
 
-      // Don't set error state - silently use fallback to prevent UI issues
+      // Don't set error state - silently use cached/fallback to prevent UI issues
       setError(null)
     } catch (err) {
       // Silently handle errors - don't crash the app
-      console.warn('Error in fetchPrices (using fallback):', err)
+      console.warn('Error in fetchPrices (using cached/fallback):', err)
 
-      // Use fallback prices - ensure we always have prices
-      const fallbackPrices: CryptoPrices = {}
+      // Try to load cached prices first, then fallback
+      const cachedPrices = loadPricesFromCache()
+      const errorPrices: CryptoPrices = {}
+      
       try {
         Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
-          const fallback = FALLBACK_PRICES[symbol]
-          if (fallback) {
-            fallbackPrices[symbol] = {
-              price: fallback.price,
-              change24h: fallback.change24h,
-              lastUpdated: new Date().toISOString(),
+          // First priority: use cached price (last successful API price)
+          const cachedPrice = cachedPrices?.[symbol]
+          if (cachedPrice && cachedPrice.price > 0 && !isNaN(cachedPrice.price)) {
+            errorPrices[symbol] = {
+              ...cachedPrice,
+              lastUpdated: cachedPrice.lastUpdated || new Date().toISOString(),
             }
+            console.log(`📦 ${symbol} using cached price due to API error: $${cachedPrice.price}`)
           }
         })
-        // Always set fallback prices, even if we had some prices before
-        setPrices(fallbackPrices)
-        setError(null) // Clear error since we have fallback
-        // Don't set error state - silently use fallback
+        
+        // Fill any remaining missing symbols with current state or fallback
+        // Use setPrices with callback to access current state safely
+        setPrices((currentPrices) => {
+          const finalErrorPrices = { ...errorPrices }
+          
+          Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
+            if (!finalErrorPrices[symbol]) {
+              // Try current state price first (from closure)
+              const currentPrice = currentPrices[symbol]
+              if (currentPrice && currentPrice.price > 0 && !isNaN(currentPrice.price)) {
+                finalErrorPrices[symbol] = currentPrice
+                console.log(`🔄 ${symbol} keeping current price due to API error: $${currentPrice.price}`)
+              } else {
+                // Last resort: use fallback
+                const fallback = FALLBACK_PRICES[symbol]
+                if (fallback) {
+                  finalErrorPrices[symbol] = {
+                    price: fallback.price,
+                    change24h: fallback.change24h,
+                    lastUpdated: new Date().toISOString(),
+                  }
+                  console.warn(`⚠️ ${symbol} using fallback price due to API error: $${fallback.price}`)
+                }
+              }
+            }
+          })
+          
+          return finalErrorPrices
+        })
+        
+        // Don't overwrite cache with error prices - keep last successful API prices in cache
+        // Cache will only be updated when API succeeds
+        setError(null) // Clear error since we have cached/fallback
       } catch (fallbackError) {
-        console.error('Critical error setting fallback prices:', fallbackError)
-        // Even if fallback fails, ensure we have fallback prices
-        const emergencyPrices: CryptoPrices = {}
-        Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
-          const fallback = FALLBACK_PRICES[symbol]
-          if (fallback) {
-            emergencyPrices[symbol] = {
-              price: fallback.price,
-              change24h: fallback.change24h,
-              lastUpdated: new Date().toISOString(),
-            }
+        console.error('Critical error setting cached/fallback prices:', fallbackError)
+        // Keep current prices if fallback setup fails
+        setPrices((currentPrices) => {
+          if (Object.keys(currentPrices).length === 0) {
+            // Only use fallback if we have no prices at all
+            const emergencyPrices: CryptoPrices = {}
+            Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
+              const fallback = FALLBACK_PRICES[symbol]
+              if (fallback) {
+                emergencyPrices[symbol] = {
+                  price: fallback.price,
+                  change24h: fallback.change24h,
+                  lastUpdated: new Date().toISOString(),
+                }
+              }
+            })
+            return emergencyPrices
           }
+          return currentPrices // Keep existing prices
         })
-        setPrices(emergencyPrices)
       }
     } finally {
       setLoading(false)
@@ -484,19 +615,8 @@ export function useCryptoPrices() {
   }
 
   useEffect(() => {
-    // Initialize with fallback prices immediately to prevent loading state
-    const initialPrices: CryptoPrices = {}
-    Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
-      const fallback = FALLBACK_PRICES[symbol]
-      if (fallback) {
-        initialPrices[symbol] = {
-          price: fallback.price,
-          change24h: fallback.change24h,
-          lastUpdated: new Date().toISOString(),
-        }
-      }
-    })
-    setPrices(initialPrices)
+    // Prices are already initialized from state initializer (cached or fallback)
+    // So we don't need to set them again here
     setLoading(false)
     setError(null) // Clear any previous errors
 
@@ -506,21 +626,28 @@ export function useCryptoPrices() {
       try {
         await fetchPrices()
       } catch (error) {
-        // Silently handle - already have fallback prices
+        // Silently handle - we already have cached/fallback prices from initialization
         if (isMounted) {
-          // Ensure fallback prices are still set even if fetch fails completely
-          const fallbackPrices: CryptoPrices = {}
-          Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
-            const fallback = FALLBACK_PRICES[symbol]
-            if (fallback) {
-              fallbackPrices[symbol] = {
-                price: fallback.price,
-                change24h: fallback.change24h,
-                lastUpdated: new Date().toISOString(),
+          // Try to load from cache if state is empty (shouldn't happen, but safety check)
+          const cached = loadPricesFromCache()
+          if (cached && Object.keys(cached).length > 0 && Object.keys(prices).length === 0) {
+            setPrices(cached)
+          } else if (Object.keys(prices).length === 0) {
+            // Only use fallback if we truly have no prices
+            const fallbackPrices: CryptoPrices = {}
+            Object.entries(COINGECKO_IDS).forEach(([symbol]) => {
+              const fallback = FALLBACK_PRICES[symbol]
+              if (fallback) {
+                fallbackPrices[symbol] = {
+                  price: fallback.price,
+                  change24h: fallback.change24h,
+                  lastUpdated: new Date().toISOString(),
+                }
               }
-            }
-          })
-          setPrices(fallbackPrices)
+            })
+            setPrices(fallbackPrices)
+          }
+          // If prices already exist, keep them - don't overwrite with fallback
         }
       }
     }
@@ -541,7 +668,7 @@ export function useCryptoPrices() {
       isMounted = false
       clearInterval(interval)
     }
-  }, [])
+  }, []) // Empty dependency array - only run on mount
 
   const getPrice = (symbol: string): number | null => {
     try {

@@ -213,7 +213,7 @@ export function TasksSection() {
         throw balanceError
       }
 
-      // Update balance
+      // Update balance using upsert to handle race conditions
       if (existingBalance) {
         const { error: updateError } = await supabase
           .from('balances')
@@ -225,15 +225,23 @@ export function TasksSection() {
 
         if (updateError) throw updateError
       } else {
-        const { error: insertError } = await supabase
+        // Use upsert instead of insert to handle race conditions gracefully
+        const { error: upsertError } = await supabase
           .from('balances')
-          .insert({
+          .upsert({
             user_id: profile.id,
             token: 'ZENTRA',
             balance: rewardAmount,
+          }, {
+            onConflict: 'user_id,token',
+            ignoreDuplicates: false,
           })
 
-        if (insertError) throw insertError
+        // Ignore conflict errors (409) - balance might have been created by another request
+        const errorStatus = (upsertError as any)?.status
+        if (upsertError && errorStatus !== 409 && upsertError.code !== '23505') {
+          throw upsertError
+        }
       }
 
       // CRITICAL: Immediately reload balance to show updated amount in real-time

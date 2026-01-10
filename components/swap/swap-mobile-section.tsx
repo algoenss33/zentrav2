@@ -286,7 +286,7 @@ export function SwapMobileSection({ onBack }: SwapMobileSectionProps) {
           8000, // 8 second timeout
           2 // 2 retries
         ),
-        // Update or create to balance (add)
+        // Update or create to balance (add) - use upsert to handle race conditions
         retryWithTimeout(() => {
           if (toBalanceResult.data) {
             // Update existing balance
@@ -298,13 +298,16 @@ export function SwapMobileSection({ onBack }: SwapMobileSectionProps) {
               })
               .eq('id', toBalanceResult.data.id)
           } else {
-            // Create new balance
+            // Use upsert instead of insert to handle race conditions gracefully
             return supabase
               .from('balances')
-              .insert({
+              .upsert({
                 user_id: profile.id,
                 token: toToken.symbol,
                 balance: toAmountNum,
+              }, {
+                onConflict: 'user_id,token',
+                ignoreDuplicates: false,
               })
           }
         }, 8000, 2) // 8 second timeout, 2 retries

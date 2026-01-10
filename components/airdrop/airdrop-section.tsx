@@ -119,14 +119,23 @@ export function AirdropSection() {
           .update({ balance: existingBalance.balance + amount })
           .eq('id', existingBalance.id)
       } else {
-        // Create new balance
-        await (supabase
+        // Use upsert instead of insert to handle race conditions gracefully
+        const { error: upsertError } = await (supabase
           .from('balances') as any)
-          .insert({
+          .upsert({
             user_id: profile.id,
             token,
             balance: amount,
+          }, {
+            onConflict: 'user_id,token',
+            ignoreDuplicates: false,
           })
+
+        // Ignore conflict errors (409) - balance might have been created by another request
+        const errorStatus = (upsertError as any)?.status
+        if (upsertError && errorStatus !== 409 && upsertError.code !== '23505') {
+          throw upsertError
+        }
       }
 
       // CRITICAL: Immediately reload balance to show updated amount in real-time

@@ -423,19 +423,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // CRITICAL: Trigger balance update event to reload balance after signup
       // This ensures the 32 ZENTRA welcome bonus appears in the wallet
       // Dispatch event multiple times with delays to ensure it's caught by useBalance hook
+      // Production fix: More aggressive triggering with shorter intervals for better reliability
       if (typeof window !== 'undefined') {
         // Immediate trigger
         window.dispatchEvent(new Event('balance-updated'))
         
-        // Trigger again after short delay to ensure balance hook has time to initialize
-        setTimeout(() => {
-          window.dispatchEvent(new Event('balance-updated'))
-        }, 1000)
-        
-        // Final trigger after longer delay as backup
-        setTimeout(() => {
-          window.dispatchEvent(new Event('balance-updated'))
-        }, 3000)
+        // Trigger multiple times with increasing delays for production reliability
+        // This ensures balance updates even if real-time subscription is delayed
+        const triggers = [500, 1000, 2000, 3000, 5000]
+        triggers.forEach((delay) => {
+          setTimeout(() => {
+            window.dispatchEvent(new Event('balance-updated'))
+            console.log(`🔄 Balance update event triggered after ${delay}ms`)
+          }, delay)
+        })
       }
 
       return { error: null }

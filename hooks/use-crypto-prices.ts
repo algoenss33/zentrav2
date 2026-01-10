@@ -143,7 +143,7 @@ async function retryWithBackoff<T>(
   return null
 }
 
-// Fetch from CoinGecko
+// Fetch from CoinGecko via Next.js API route (to avoid CORS issues)
 async function fetchFromCoinGecko(): Promise<CryptoPrices | null> {
   if (!checkCircuitBreaker('coingecko')) {
     return null
@@ -151,7 +151,8 @@ async function fetchFromCoinGecko(): Promise<CryptoPrices | null> {
 
   try {
     const ids = Object.values(COINGECKO_IDS).join(',')
-    const apiUrl = `${COINGECKO_API_URL}?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true`
+    // Use internal API route to avoid CORS errors
+    const apiUrl = `/api/crypto/coingecko?ids=${ids}`
     
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
@@ -164,7 +165,7 @@ async function fetchFromCoinGecko(): Promise<CryptoPrices | null> {
       },
       cache: 'no-store',
     }).catch((fetchError) => {
-      // Handle network errors (ERR_NAME_NOT_RESOLVED, etc.)
+      // Handle network errors
       clearTimeout(timeoutId)
       throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`)
     })
@@ -189,6 +190,11 @@ async function fetchFromCoinGecko(): Promise<CryptoPrices | null> {
     const data = await response.json().catch((parseError) => {
       throw new Error(`Failed to parse CoinGecko response: ${parseError instanceof Error ? parseError.message : String(parseError)}`)
     })
+    
+    // Check if response has error field (from API route)
+    if (data && data.error) {
+      throw new Error(data.message || data.error)
+    }
     
     const newPrices: CryptoPrices = {}
 

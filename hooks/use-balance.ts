@@ -14,12 +14,20 @@ export function useBalance() {
   const [balances, setBalances] = useState<Balance[]>([])
   const [loading, setLoading] = useState(false) // Start with false - don't block UI
   const userIdRef = useRef<string | null>(null) // Track user ID to prevent unnecessary clears
+  const userRef = useRef(user) // Keep current user reference to avoid stale closures
   const isCreatingMissingBalances = useRef<boolean>(false) // Prevent infinite loop when creating missing balances
+  const lastLoadTimeRef = useRef<number>(0) // Track last successful load time for retry logic
+
+  // Update user ref whenever user changes
+  useEffect(() => {
+    userRef.current = user
+  }, [user])
 
   // Stabilized loadBalances with useCallback to avoid unnecessary effect reruns.
-  // Disables heavy retry logic so UI doesn't stay in loading state terlalu lama.
-  const loadBalances = useCallback(async (showLoading: boolean = false) => {
-    if (!user) {
+  // Uses userRef to always get latest user, avoiding stale closure issues in production.
+  const loadBalances = useCallback(async (showLoading: boolean = false, retryCount: number = 0) => {
+    const currentUser = userRef.current
+    if (!currentUser) {
       // If no user, clear balances only if we had a user before
       if (userIdRef.current !== null) {
         setBalances([])
@@ -35,7 +43,7 @@ export function useBalance() {
       const { data, error } = await supabase
         .from('balances')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
         .order('token', { ascending: true })
 
       if (error) {
@@ -48,12 +56,21 @@ export function useBalance() {
           errorStatus === 409; // Conflict (handled elsewhere, don't spam console)
         
         if (!isIgnorableError) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('Error loading balances:', {
-              message: error.message,
-              code: error.code,
-              status: errorStatus,
-            })
+          // Log errors in production for debugging
+          console.warn('Error loading balances:', {
+            message: error.message,
+            code: error.code,
+            status: errorStatus,
+            retryCount,
+          })
+          
+          // Retry logic for production: retry up to 2 times with exponential backoff
+          if (retryCount < 2 && !isIgnorableError) {
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 3000)
+            setTimeout(() => {
+              loadBalances(showLoading, retryCount + 1)
+            }, delay)
+            return
           }
         }
         // Jangan blok UI terlalu lama: hentikan loading dan biarkan balance lama tetap tampil.
@@ -63,6 +80,9 @@ export function useBalance() {
         }
         return
       }
+
+      // Mark successful load time
+      lastLoadTimeRef.current = Date.now()
 
       if (data && Array.isArray(data)) {
         // Ensure all required tokens exist - create missing ones
@@ -83,7 +103,7 @@ export function useBalance() {
               supabase
                 .from('balances')
                 .upsert({
-                  user_id: user.id,
+                  user_id: currentUser.id,
                   token,
                   balance: 0,
                 } as any, {
@@ -102,9 +122,7 @@ export function useBalance() {
                       upsertError.message?.includes('conflict');
                     
                     if (!isConflictError) {
-                      if (process.env.NODE_ENV === 'development') {
-                        console.warn(`Failed to create balance for ${token}:`, upsertError.message)
-                      }
+                      console.warn(`Failed to create balance for ${token}:`, upsertError.message)
                     }
                   }
                 })
@@ -113,8 +131,8 @@ export function useBalance() {
             // Reset flag and reload balances after creating missing ones
             isCreatingMissingBalances.current = false
             // Only reload if we're still mounted and user is still the same
-            if (userIdRef.current === user.id) {
-              loadBalances(false)
+            if (userIdRef.current === currentUser.id) {
+              loadBalances(false, 0)
             }
           }).catch(() => {
             // Reset flag on error
@@ -126,8 +144,11 @@ export function useBalance() {
         // Always update balances, even if empty array (user has no balances yet)
         setBalances(data as Balance[])
         
-        if (process.env.NODE_ENV === 'development' && data.length > 0) {
-          console.log('Balances loaded:', data.length, 'tokens')
+        if (data.length > 0) {
+          console.log('✅ Balances loaded:', data.length, 'tokens', { 
+            timestamp: new Date().toISOString(),
+            userId: currentUser.id 
+          })
         }
       } else {
         // If data is null or undefined, set empty array but don't clear existing balances
@@ -140,23 +161,33 @@ export function useBalance() {
         }
       }
 
-      if (process.env.NODE_ENV === 'development' && data && data.length > 0) {
+      if (data && data.length > 0) {
         const balancesData = data as Balance[]
         const zentraBalance = balancesData.find((b) => b.token === 'ZENTRA')
         if (zentraBalance) {
-          console.log('ZENTRA Balance loaded:', zentraBalance.balance)
+          console.log('💵 ZENTRA Balance:', zentraBalance.balance)
         }
       }
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Error loading balances (keeping existing data):', error)
+    } catch (error: any) {
+      console.warn('❌ Error loading balances (keeping existing data):', {
+        message: error?.message,
+        retryCount,
+      })
+      
+      // Retry on unexpected errors
+      if (retryCount < 2) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 3000)
+        setTimeout(() => {
+          loadBalances(showLoading, retryCount + 1)
+        }, delay)
+        return
       }
     } finally {
       if (showLoading) {
         setLoading(false)
       }
     }
-  }, [user])
+  }, []) // Empty deps - use userRef instead to avoid stale closures
 
   useEffect(() => {
     if (!user) {
@@ -188,82 +219,131 @@ export function useBalance() {
     // Subscribe to real-time updates with error handling
     let channel: ReturnType<typeof supabase.channel> | null = null
     let pollInterval: NodeJS.Timeout | null = null
+    let fastPollInterval: NodeJS.Timeout | null = null // Fast polling right after updates
     let isCleaningUp = false // Flag to prevent false positive warnings during cleanup
+    let realtimeWorking = false // Track if real-time is working
     
     // Listen for custom balance update events with minimal debouncing for immediate updates
     let balanceUpdateTimeout: NodeJS.Timeout | null = null
     const handleBalanceUpdate = () => {
-      // Minimal debounce (50ms instead of 100ms) for faster real-time updates
-      // This ensures balance updates immediately after task completion
+      // Immediately trigger reload - no debounce for production reliability
+      console.log('🔄 Balance update event received')
+      
+      // Clear any existing timeout
       if (balanceUpdateTimeout) {
         clearTimeout(balanceUpdateTimeout)
       }
-      balanceUpdateTimeout = setTimeout(() => {
-        loadBalances(false)
-      }, 50) // Reduced delay for faster real-time updates
+      
+      // Load immediately
+      loadBalances(false, 0)
+      
+      // Set up fast polling for the next 10 seconds to catch any missed updates
+      // This is critical for production where real-time might be delayed
+      if (fastPollInterval) {
+        clearInterval(fastPollInterval)
+      }
+      
+      let fastPollCount = 0
+      fastPollInterval = setInterval(() => {
+        fastPollCount++
+        loadBalances(false, 0)
+        // Stop fast polling after 10 seconds (5 polls at 2s interval)
+        if (fastPollCount >= 5) {
+          if (fastPollInterval) {
+            clearInterval(fastPollInterval)
+            fastPollInterval = null
+          }
+        }
+      }, 2000) // Poll every 2 seconds for 10 seconds after update
     }
     
-    window.addEventListener('balance-updated', handleBalanceUpdate)
+    // Add event listener immediately (before any potential events)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('balance-updated', handleBalanceUpdate)
+    }
 
     // Setup real-time subscription with fallback
     const setupRealtimeSubscription = () => {
       try {
+        const currentUser = userRef.current
+        if (!currentUser) return
+        
         channel = supabase
-          .channel(`balances-changes-${user.id}-${Date.now()}`) // Unique channel name
+          .channel(`balances-changes-${currentUser.id}-${Date.now()}`) // Unique channel name
           .on(
             'postgres_changes',
             {
               event: '*',
               schema: 'public',
               table: 'balances',
-              filter: `user_id=eq.${user.id}`,
+              filter: `user_id=eq.${currentUser.id}`,
             },
             (payload) => {
-              console.log('Balance changed (realtime):', payload)
+              console.log('🔔 Balance changed (realtime):', payload)
+              realtimeWorking = true
               // Immediately update balance when realtime event is received
-              // No debounce needed here - realtime events are already filtered by Supabase
-              loadBalances(false)
+              loadBalances(false, 0)
             }
           )
           .subscribe((status) => {
             // Don't log warnings if we're cleaning up (prevents false positives)
             if (isCleaningUp) return
             
+            console.log('📡 Real-time subscription status:', status)
+            
             if (status === 'SUBSCRIBED') {
-              console.log('Balance real-time subscription active')
-              // Clear polling if real-time works
+              console.log('✅ Balance real-time subscription active')
+              realtimeWorking = true
+              // Clear slow polling if real-time works (keep fast polling for immediate updates)
               if (pollInterval) {
                 clearInterval(pollInterval)
                 pollInterval = null
               }
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              // Only warn for actual errors, not CLOSED status (which happens during cleanup)
-              console.warn('Balance real-time subscription failed, using polling fallback')
-              // Fallback to polling if real-time fails
+              // Real-time failed, use more aggressive polling
+              console.warn('⚠️ Balance real-time subscription failed, using polling fallback')
+              realtimeWorking = false
+              
+              // Setup more aggressive polling (every 5 seconds instead of 30)
+              // This is critical for production reliability
               if (!pollInterval && !isCleaningUp) {
                 pollInterval = setInterval(() => {
-                  loadBalances(false)
-                }, 30000) // Poll every 30 seconds
+                  loadBalances(false, 0)
+                }, 5000) // Poll every 5 seconds for production reliability
               }
             } else if (status === 'CLOSED') {
-              // CLOSED status is normal during cleanup, don't warn
-              // Only setup polling if not cleaning up and real-time was working before
+              // CLOSED status - real-time disconnected
+              realtimeWorking = false
+              console.warn('⚠️ Real-time connection closed, using polling')
+              
+              // Setup polling if not already running
               if (!pollInterval && !isCleaningUp) {
                 pollInterval = setInterval(() => {
-                  loadBalances(false)
-                }, 30000) // Poll every 30 seconds
+                  loadBalances(false, 0)
+                }, 5000) // Poll every 5 seconds
               }
             }
           })
+          
+        // Timeout check: if subscription doesn't connect within 5 seconds, enable polling
+        setTimeout(() => {
+          if (!realtimeWorking && !pollInterval && !isCleaningUp) {
+            console.warn('⚠️ Real-time subscription timeout, enabling polling fallback')
+            pollInterval = setInterval(() => {
+              loadBalances(false, 0)
+            }, 5000) // Poll every 5 seconds
+          }
+        }, 5000)
       } catch (error) {
         if (!isCleaningUp) {
-          console.warn('Failed to setup real-time subscription, using polling:', error)
+          console.warn('❌ Failed to setup real-time subscription, using polling:', error)
         }
-        // Fallback: poll for updates every 30 seconds if real-time fails
+        realtimeWorking = false
+        // Fallback: poll for updates every 5 seconds if real-time fails
         if (!pollInterval && !isCleaningUp) {
           pollInterval = setInterval(() => {
-            loadBalances(false)
-          }, 30000)
+            loadBalances(false, 0)
+          }, 5000) // More aggressive polling for production
         }
       }
     }
@@ -283,25 +363,31 @@ export function useBalance() {
           if (channelState && channelState !== 'closed') {
             supabase.removeChannel(channel).catch((err) => {
               // Silently handle channel removal errors during cleanup
-              // Don't log during cleanup as it's expected behavior
             })
           }
         } catch (error) {
           // Silently handle channel removal errors during cleanup
         }
       }
-      // Clear polling interval if exists
+      // Clear all polling intervals
       if (pollInterval) {
         clearInterval(pollInterval)
         pollInterval = null
+      }
+      if (fastPollInterval) {
+        clearInterval(fastPollInterval)
+        fastPollInterval = null
       }
       // Clear balance update timeout
       if (balanceUpdateTimeout) {
         clearTimeout(balanceUpdateTimeout)
       }
-      window.removeEventListener('balance-updated', handleBalanceUpdate)
+      // Remove event listener
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('balance-updated', handleBalanceUpdate)
+      }
     }
-  }, [user]) // Only depend on user, not loadBalances to prevent unnecessary re-runs
+  }, [user, loadBalances]) // Include loadBalances in deps - it's now stable with empty deps
 
   const getBalance = (token: string): number => {
     const balance = balances.find(b => b.token === token)
@@ -327,9 +413,14 @@ export function useBalance() {
     return getZentraBalance() * ZENTRA_PRICE
   }
 
-  const reloadBalances = async () => {
-    await loadBalances(false) // Reload without showing loading state
-  }
+  const reloadBalances = useCallback(async () => {
+    console.log('🔄 reloadBalances called')
+    await loadBalances(false, 0) // Reload without showing loading state, no retry
+    // Also trigger event as backup
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('balance-updated'))
+    }
+  }, [loadBalances])
 
   return {
     balances,

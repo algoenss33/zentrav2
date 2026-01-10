@@ -27,18 +27,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true
     let timeoutId: NodeJS.Timeout | null = null
+    let loadingComplete = false
 
-    // Safety timeout - force loading to false after 5 seconds to prevent stuck loading
-    // Increased from 3s to 5s to give more time for network requests in production
+    // Safety timeout - force loading to false after 8 seconds to prevent stuck loading
+    // Increased from 5s to 8s to give more time for network requests in production
     timeoutId = setTimeout(() => {
-      if (isMounted) {
-        console.warn('Auth loading timeout - forcing loading to false')
+      if (isMounted && !loadingComplete) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Auth loading timeout - forcing loading to false')
+        }
+        loadingComplete = true
         setLoading(false)
         // If we have a session but profile loading is stuck, try to continue anyway
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session?.user && isMounted) {
             setUser(session.user)
-            // Try to load profile one more time, but don't wait
+            // Try to load profile one more time, but don't wait or block UI
             loadProfile(session.user.id).catch(() => {
               // Silently fail - user can still use the app
             })
@@ -47,14 +51,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Silently fail
         })
       }
-    }, 5000)
+    }, 8000)
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (!isMounted) return
       
       if (error) {
         console.error('Error getting session:', error)
+        loadingComplete = true
         setLoading(false)
         if (timeoutId) clearTimeout(timeoutId)
         return
@@ -62,18 +67,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadProfile(session.user.id).finally(() => {
+        // Wait for loadProfile to complete, but with timeout protection
+        try {
+          await loadProfile(session.user.id)
+          loadingComplete = true
           if (isMounted && timeoutId) {
             clearTimeout(timeoutId)
           }
-        })
+        } catch (profileError) {
+          // Error already handled in loadProfile
+          loadingComplete = true
+          if (isMounted && timeoutId) {
+            clearTimeout(timeoutId)
+          }
+        }
       } else {
+        loadingComplete = true
         setLoading(false)
         if (timeoutId) clearTimeout(timeoutId)
       }
     }).catch((err) => {
       if (isMounted) {
         console.error('Error in getSession:', err)
+        loadingComplete = true
         setLoading(false)
         if (timeoutId) clearTimeout(timeoutId)
       }
@@ -114,39 +130,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      // Simple query - no retry, no complex timeout logic
-      // Supabase has its own timeout, and we have safety timeout in useEffect
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
+      // Add timeout protection for the query itself
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 6000)
 
-      if (error) {
-        // Check error status for HTTP errors
-        const errorStatus = (error as any).status
-        
-        // Check if it's a "not found" error
-        const isNotFound = 
-          error.code === 'PGRST116' || 
-          error.code === '42P01' ||
-          error.message?.toLowerCase().includes('no rows') || 
-          error.message?.toLowerCase().includes('not found') ||
-          error.message?.toLowerCase().includes('does not exist')
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single()
 
-        // Check if it's an ignorable error (406 = Not Acceptable, usually header issue but data might still be valid)
-        const isIgnorableError = 
-          errorStatus === 406 || // Not Acceptable (header issue, but might still work)
-          errorStatus === 409; // Conflict (handled elsewhere)
+        clearTimeout(timeoutId)
 
-        if (isNotFound) {
+        // Handle query result
+        if (error) {
+          // Check error status for HTTP errors
+          const errorStatus = (error as any).status
+          
+          // Check if it's a "not found" error
+          const isNotFound = 
+            error.code === 'PGRST116' || 
+            error.code === '42P01' ||
+            error.message?.toLowerCase().includes('no rows') || 
+            error.message?.toLowerCase().includes('not found') ||
+            error.message?.toLowerCase().includes('does not exist')
+
+          // Check if it's an ignorable error (406 = Not Acceptable, usually header issue but data might still be valid)
+          const isIgnorableError = 
+            errorStatus === 406 || // Not Acceptable (header issue, but might still work)
+            errorStatus === 409; // Conflict (handled elsewhere)
+
+          if (isNotFound) {
+            setProfile(null)
+            setLoading(false)
+            return
+          }
+
+          // For ignorable errors, silently continue (don't spam console)
+          if (isIgnorableError) {
+            setProfile(null)
+            setLoading(false)
+            return
+          }
+
+          // For other errors, log but don't block UI
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Error loading profile:', {
+              message: error.message,
+              code: error.code,
+              status: errorStatus,
+            })
+          }
           setProfile(null)
           setLoading(false)
           return
         }
 
-        // For ignorable errors, silently continue (don't spam console)
-        if (isIgnorableError) {
+        // Successfully loaded profile
+        if (data) {
+          setProfile(data)
+        } else {
+          setProfile(null)
+        }
+        setLoading(false)
+      } catch (queryError: any) {
+        clearTimeout(timeoutId)
+        
+        // Check if it was a timeout
+        if (controller.signal.aborted || queryError?.message?.includes('aborted')) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Profile load timeout')
+          }
           setProfile(null)
           setLoading(false)
           return
@@ -154,24 +209,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // For other errors, log but don't block UI
         if (process.env.NODE_ENV === 'development') {
-          console.warn('Error loading profile:', {
-            message: error.message,
-            code: error.code,
-            status: errorStatus,
-          })
+          console.warn('Error loading profile (non-blocking):', queryError?.message || queryError)
         }
         setProfile(null)
         setLoading(false)
-        return
       }
-
-      // Successfully loaded profile
-      if (data) {
-        setProfile(data)
-      } else {
-        setProfile(null)
-      }
-      setLoading(false)
     } catch (error: any) {
       // Handle all errors gracefully - don't block UI
       if (process.env.NODE_ENV === 'development') {
@@ -365,7 +407,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Also try to load profile from database to ensure consistency
       // Wait a bit to ensure all database operations are complete
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       // Load profile to ensure it's properly loaded
       try {
@@ -376,6 +418,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (process.env.NODE_ENV === 'development') {
           console.warn('Error loading profile after signup, but profile was created:', loadError)
         }
+      }
+
+      // CRITICAL: Trigger balance update event to reload balance after signup
+      // This ensures the 32 ZENTRA welcome bonus appears in the wallet
+      // Dispatch event multiple times with delays to ensure it's caught by useBalance hook
+      if (typeof window !== 'undefined') {
+        // Immediate trigger
+        window.dispatchEvent(new Event('balance-updated'))
+        
+        // Trigger again after short delay to ensure balance hook has time to initialize
+        setTimeout(() => {
+          window.dispatchEvent(new Event('balance-updated'))
+        }, 1000)
+        
+        // Final trigger after longer delay as backup
+        setTimeout(() => {
+          window.dispatchEvent(new Event('balance-updated'))
+        }, 3000)
       }
 
       return { error: null }

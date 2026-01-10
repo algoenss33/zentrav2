@@ -67,22 +67,29 @@ export function AssetList() {
 
   // Get all tokens from balances and create assets list
   const assets = useMemo(() => {
+    // Ensure balances is always an array to prevent errors
+    if (!balances || !Array.isArray(balances) || balances.length === 0) {
+      return []
+    }
+    
     // Get all unique tokens from balances
-    const allTokens = balances.map(b => b.token)
+    const allTokens = balances
+      .filter(b => b && b.token)
+      .map(b => b.token)
     const uniqueTokens = Array.from(new Set(allTokens))
     
     // Create assets from balances
     const assetsList = uniqueTokens.map(token => {
-      const balance = getBalance(token)
-      const price = getTokenPrice(token)
+      const balance = getBalance(token) || 0
+      const price = getTokenPrice(token) || 0
       const value = balance * price
       
       return {
         symbol: token,
         name: tokenNames[token] || token,
-        balance,
-        value,
-        price,
+        balance: isNaN(balance) ? 0 : balance,
+        value: isNaN(value) ? 0 : value,
+        price: isNaN(price) ? 0 : price,
         image: tokenImages[token] || '/chain/zentra.png',
       }
     })

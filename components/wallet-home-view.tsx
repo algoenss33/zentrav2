@@ -7,6 +7,7 @@ import { useCryptoPrices } from "@/hooks/use-crypto-prices"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import {
   Send,
   ArrowUp,
@@ -21,6 +22,7 @@ import {
   MoreVertical,
   LogOut,
   X,
+  Loader2,
 } from "lucide-react"
 
 const tokenImages: Record<string, string> = {
@@ -69,17 +71,74 @@ export function WalletHomeView({
   const { getBalance, zentraPrice, loading, balances } = useBalance()
   const { getPrice, getChange24h, formatPrice, formatChange24h } = useCryptoPrices()
   const { profile, signOut } = useAuth()
+  const router = useRouter()
   const [showSendPopup, setShowSendPopup] = useState(false)
   const [activeTab, setActiveTab] = useState<'exchange' | 'web3'>('web3')
   const [showWalletDropdown, setShowWalletDropdown] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
   const handleSignOut = async () => {
+    // Prevent multiple simultaneous sign out attempts
+    if (isSigningOut) {
+      return
+    }
+
     try {
-      await signOut()
+      setIsSigningOut(true)
+      
+      // Set timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Sign out timeout - taking too long"))
+        }, 10000) // 10 second timeout
+      })
+
+      // Race between signOut and timeout
+      await Promise.race([
+        signOut(),
+        timeoutPromise
+      ])
+
       toast.success("Signed out successfully")
-    } catch (error) {
+      
+      // Clear any cached data
+      if (typeof window !== "undefined") {
+        // Clear local storage except referral code
+        const referralCode = localStorage.getItem('referral_code')
+        localStorage.clear()
+        if (referralCode) {
+          localStorage.setItem('referral_code', referralCode)
+        }
+      }
+      
+      // Redirect to home page
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          router.push("/")
+          // Force reload as fallback if router doesn't work
+          setTimeout(() => {
+            window.location.href = "/"
+          }, 500)
+        }
+      }, 300)
+    } catch (error: any) {
       console.error("Error signing out:", error)
-      toast.error("Failed to sign out")
+      
+      // Reset state even on error
+      setIsSigningOut(false)
+      
+      // Show appropriate error message
+      if (error?.message?.includes("timeout")) {
+        toast.error("Sign out is taking too long. Redirecting to home page...")
+        // Force reload as last resort
+        setTimeout(() => {
+          if (typeof window !== "undefined") {
+            window.location.href = "/"
+          }
+        }, 2000)
+      } else {
+        toast.error("Failed to sign out. Please try again.")
+      }
     }
   }
 
@@ -129,10 +188,12 @@ export function WalletHomeView({
   }
 
   // Get all tokens from balances and create assets list, sorted by balance (highest first)
-  const assets = balances
+  // Ensure balances is always an array to prevent errors
+  const assets = (balances || [])
+    .filter(balance => balance && balance.token && typeof balance.balance === 'number')
     .map(balance => {
       const symbol = balance.token
-      const balanceAmount = balance.balance
+      const balanceAmount = balance.balance || 0
       const price = getTokenPrice(symbol)
       const change24h = getTokenChange24h(symbol)
       const value = balanceAmount * price
@@ -141,9 +202,9 @@ export function WalletHomeView({
         symbol,
         name: tokenNames[symbol] || symbol,
         balance: balanceAmount,
-        value,
-        price,
-        change24h,
+        value: isNaN(value) ? 0 : value,
+        price: isNaN(price) ? 0 : price,
+        change24h: isNaN(change24h) ? 0 : change24h,
         image: tokenImages[symbol] || '/chain/zentra.png',
       }
     })
@@ -161,11 +222,14 @@ export function WalletHomeView({
       return b.value - a.value
     })
 
-  // Calculate total portfolio value
-  const totalValue = assets.reduce((sum, asset) => sum + asset.value, 0)
+  // Calculate total portfolio value - ensure it's always a valid number
+  const totalValue = assets.reduce((sum, asset) => {
+    const value = asset.value || 0
+    return sum + (isNaN(value) ? 0 : value)
+  }, 0)
   
   // Count assets with balance > 0
-  const assetsWithBalance = assets.filter(asset => asset.balance > 0).length
+  const assetsWithBalance = assets.filter(asset => asset && asset.balance > 0).length
 
   // Mock NFTs data
   const nfts = [
@@ -196,6 +260,7 @@ export function WalletHomeView({
                   width={40}
                   height={40}
                   className="object-contain drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                  loading="eager"
                 />
               </div>
               <div>
@@ -209,12 +274,22 @@ export function WalletHomeView({
             </div>
             <button
               onClick={handleSignOut}
-              className="ml-3 inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 text-gray-200 hover:text-white text-xs transition-colors"
+              disabled={isSigningOut}
+              className="ml-3 inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 text-gray-200 hover:text-white text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Exit wallet"
               title="Exit / Sign out"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Exit</span>
+              {isSigningOut ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="hidden sm:inline">Exiting...</span>
+                </>
+              ) : (
+                <>
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exit</span>
+                </>
+              )}
             </button>
           </div>
           {/* Tabs */}

@@ -1,15 +1,20 @@
-import { Loader2Icon } from 'lucide-react'
-
 import { cn } from '@/lib/utils'
+import NodeNetworkBackground from '@/components/node-network-background'
 
-function Spinner({ className, ...props }: React.ComponentProps<'svg'>) {
+function Spinner({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <Loader2Icon
+    <div
       role="status"
       aria-label="Loading"
-      className={cn('size-4 animate-spin', className)}
+      className={cn('flex items-center justify-center', className)}
       {...props}
-    />
+    >
+      <NodeNetworkBackground
+        size={56}
+        showCenterLogo={false}
+        className="node-network-spinner"
+      />
+    </div>
   )
 }
 

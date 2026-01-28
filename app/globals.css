@@ -3,96 +3,93 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Local Arial family served from /public */
-@font-face {
-  font-family: "ArialCustom";
-  src:
-    url("/Web%20Fonts/8d223b3ad8d4819e9dcf22757e4cc2c4.woff2") format("woff2"),
-    url("/Web%20Fonts/8d223b3ad8d4819e9dcf22757e4cc2c4.woff") format("woff"),
-    url("/Web%20Fonts/8d223b3ad8d4819e9dcf22757e4cc2c4.ttf") format("truetype"),
-    url("/Web%20Fonts/8d223b3ad8d4819e9dcf22757e4cc2c4.eot") format("embedded-opentype"),
-    url("/Web%20Fonts/8d223b3ad8d4819e9dcf22757e4cc2c4.svg#Arial") format("svg");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Crypto dark mode - Primary colors */
+  --background: oklch(0.08 0 0);
+  --foreground: oklch(0.98 0 0);
+  --card: oklch(0.12 0 0);
+  --card-foreground: oklch(0.98 0 0);
 
-  /* Use local Arial across the app */
-  --font-sans: "ArialCustom", "Arial", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Neon accents */
+  --primary: oklch(0.55 0.24 262);
+  --primary-foreground: oklch(0.98 0 0);
+  --accent: oklch(0.65 0.22 142);
+  --accent-foreground: oklch(0.08 0 0);
+
+  /* Secondary & muted */
+  --secondary: oklch(0.2 0 0);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.25 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+
+  /* Other tokens */
+  --popover: oklch(0.12 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.18 0 0);
+  --input: oklch(0.15 0 0);
+  --ring: oklch(0.55 0.24 262);
+
+  /* Chart colors */
+  --chart-1: oklch(0.65 0.22 142);
+  --chart-2: oklch(0.55 0.24 262);
+  --chart-3: oklch(0.6 0.18 48);
+  --chart-4: oklch(0.5 0.2 300);
+  --chart-5: oklch(0.7 0.2 100);
+
+  --radius: 0.625rem;
+
+  /* Sidebar */
+  --sidebar: oklch(0.1 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.55 0.24 262);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.65 0.22 142);
+  --sidebar-accent-foreground: oklch(0.08 0 0);
+  --sidebar-border: oklch(0.18 0 0);
+  --sidebar-ring: oklch(0.55 0.24 262);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* Same as root in dark mode crypto theme */
+  --background: oklch(0.08 0 0);
+  --foreground: oklch(0.98 0 0);
+  --card: oklch(0.12 0 0);
+  --card-foreground: oklch(0.98 0 0);
+  --primary: oklch(0.55 0.24 262);
+  --primary-foreground: oklch(0.98 0 0);
+  --accent: oklch(0.65 0.22 142);
+  --accent-foreground: oklch(0.08 0 0);
+  --secondary: oklch(0.2 0 0);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.25 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+  --popover: oklch(0.12 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.18 0 0);
+  --input: oklch(0.15 0 0);
+  --ring: oklch(0.55 0.24 262);
+  --chart-1: oklch(0.65 0.22 142);
+  --chart-2: oklch(0.55 0.24 262);
+  --chart-3: oklch(0.6 0.18 48);
+  --chart-4: oklch(0.5 0.2 300);
+  --chart-5: oklch(0.7 0.2 100);
+  --sidebar: oklch(0.1 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.55 0.24 262);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.65 0.22 142);
+  --sidebar-accent-foreground: oklch(0.08 0 0);
+  --sidebar-border: oklch(0.18 0 0);
+  --sidebar-ring: oklch(0.55 0.24 262);
 }
 
 @theme inline {
-  /* optional: --font-sans, --font-serif, --font-mono if they are applied in the layout.tsx */
+  --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -135,298 +132,121 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html {
-    height: 100%;
-    height: 100dvh; /* Dynamic viewport height for mobile */
-    overflow: hidden;
-    background: linear-gradient(to bottom right, #0d1020, #0b0e11, #04060d);
-  }
   body {
-    @apply text-foreground;
-    background: linear-gradient(to bottom right, #0d1020, #0b0e11, #04060d);
-    height: 100%;
-    height: 100dvh; /* Dynamic viewport height for mobile */
-    width: 100vw;
-    overflow: hidden;
-    font-family: var(--font-sans);
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-    position: relative;
-    -webkit-overflow-scrolling: touch;
-    /* Prevent overscroll bounce on iOS */
-    overscroll-behavior: none;
-    margin: 0;
-    padding: 0;
+    @apply bg-background text-foreground;
   }
 }
 
-/* Mobile-first responsive design */
-@media (max-width: 390px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-/* Safe area insets for mobile devices */
-.safe-area-inset-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* iOS-style smooth scrolling */
-@supports (-webkit-overflow-scrolling: touch) {
-  * {
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* Prevent text distortion on mobile */
-* {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
-
-/* Mobile web app styles */
-@media (max-width: 390px) {
-  body {
-    overflow-x: hidden;
-    position: relative;
-  }
-  
-  /* Ensure proper touch targets */
-  button, a {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-/* Mobile optimizations for landing page */
-@media (max-width: 768px) {
-  /* Touch-friendly buttons */
-  button {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-  
-  /* Smooth scrolling on mobile */
-  * {
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  /* Reduced motion for better performance */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
-}
-
-/* Improve text rendering on mobile */
-@media (max-width: 768px) {
-  h1, h2, h3, h4, h5, h6, p {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-  }
-}
-
-/* Optimized CSS Animations - Better Performance */
-@keyframes floatGlow {
+/* Crypto Mining Animations - Consistent Yellow/Orange Theme */
+@keyframes glow {
   0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(20px, 15px) scale(1.05);
-  }
-  66% {
-    transform: translate(-15px, 10px) scale(0.98);
-  }
-}
-
-@keyframes logoFloat {
-  0%, 100% {
-    transform: translateY(0) scale(1) rotate(0deg);
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.5), 0 0 20px rgba(251, 191, 36, 0.3), 0 0 30px rgba(234, 88, 12, 0.2);
   }
   50% {
-    transform: translateY(-8px) scale(1.05) rotate(2deg);
+    text-shadow: 0 0 20px rgba(251, 191, 36, 0.8), 0 0 30px rgba(251, 191, 36, 0.5), 0 0 40px rgba(234, 88, 12, 0.4);
   }
 }
 
-@keyframes pulseGlow {
+@keyframes pulse-glow {
   0%, 100% {
-    opacity: 0.15;
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7), 0 0 0 0 rgba(234, 88, 12, 0.5);
   }
   50% {
-    opacity: 0.25;
+    box-shadow: 0 0 0 8px rgba(251, 191, 36, 0), 0 0 0 16px rgba(234, 88, 12, 0);
+  }
+}
+
+@keyframes border-glow {
+  0%, 100% {
+    border-color: rgba(251, 191, 36, 0.4);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.2), inset 0 0 10px rgba(251, 191, 36, 0.1);
+  }
+  50% {
+    border-color: rgba(251, 191, 36, 0.7);
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.4), inset 0 0 20px rgba(251, 191, 36, 0.2);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
 @keyframes shimmer {
   0% {
-    transform: translateX(-100%) translateY(0);
+    background-position: -1000px 0;
   }
   100% {
-    transform: translateX(200%) translateY(0);
+    background-position: 1000px 0;
   }
 }
 
-@keyframes rotateGradient {
+@keyframes shimmer-glow {
   0% {
-    transform: rotate(0deg);
+    background-position: -200% 0;
   }
   100% {
-    transform: rotate(360deg);
+    background-position: 200% 0;
   }
 }
 
-/* Performance optimizations */
-* {
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  perspective: 1000px;
-}
-
-.will-change-transform {
-  will-change: transform;
-}
-
-.will-change-opacity {
-  will-change: opacity;
-}
-
-/* Smooth transitions */
-img, button, a {
-  transform: translate3d(0, 0, 0);
-}
-
-/* Hidden scrollbar - iOS style - Complete solution */
-.scrollbar-hidden {
-  /* Firefox */
-  scrollbar-width: none;
-  /* IE and Edge */
-  -ms-overflow-style: none;
-  /* Smooth scrolling */
-  scroll-behavior: smooth;
-  /* iOS momentum scrolling */
-  -webkit-overflow-scrolling: touch;
-  /* Prevent overscroll bounce */
-  overscroll-behavior-y: contain;
-}
-
-/* Chrome, Safari, Opera - Hide scrollbar */
-.scrollbar-hidden::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-  background: transparent;
-  -webkit-appearance: none;
-}
-
-.scrollbar-hidden::-webkit-scrollbar-track {
-  display: none;
-  background: transparent;
-}
-
-.scrollbar-hidden::-webkit-scrollbar-thumb {
-  display: none;
-  background: transparent;
-}
-
-/* iOS-style smooth scrolling container */
-.ios-scroll {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  scroll-behavior: smooth;
-  /* Prevent scroll indicators */
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.ios-scroll::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-  background: transparent;
-  -webkit-appearance: none;
-}
-
-/* Global scrollbar hiding for clean minimalist interface */
-html, body {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
-  width: 0;
-  height: 0;
-  background: transparent;
-  -webkit-appearance: none;
-}
-
-/* Hero CTA buttons - responsive & consistent with global font */
-.btn-neon {
-  @apply relative inline-flex items-center justify-center gap-2
-         px-6 py-3 sm:px-8 sm:py-3.5
-         font-sans font-semibold text-sm sm:text-base
-         text-background bg-primary rounded-lg
-         transition-all duration-300 overflow-hidden;
-}
-
-.btn-neon:hover {
-  @apply shadow-lg;
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
-}
-
-/* Secondary button style to match CTA font & spacing */
-.btn-secondary {
-  @apply relative inline-flex items-center justify-center gap-2
-         px-6 py-3 sm:px-8 sm:py-3.5
-         font-sans font-semibold text-sm sm:text-base
-         rounded-lg border border-white/15
-         bg-white/5 text-white/90
-         hover:bg-white/10 hover:text-white
-         transition-all duration-300;
-}
-
-/* Optional: icon slight movement on neon hover */
-.btn-neon-icon-animate {
-  @apply transition-transform duration-300;
-}
-
-.btn-neon:hover .btn-neon-icon-animate {
-  @apply translate-x-1;
-}
-
-/* Shimmer animation for buttons */
-@keyframes shimmer {
-  0% {
-    background-position: -200% center;
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
   }
-  100% {
-    background-position: 200% center;
+  50% {
+    transform: translateY(-10px);
   }
 }
 
-.animate-shimmer {
-  animation: shimmer 3s ease-in-out infinite;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.2) 50%,
-    transparent 100%
-  );
-  background-size: 200% auto;
+@keyframes mining-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
 }
 
-/* Gradient text animation */
+@keyframes number-count {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes gradient-shift {
   0%, 100% {
     background-position: 0% 50%;
@@ -436,43 +256,332 @@ body::-webkit-scrollbar {
   }
 }
 
-.gradient-text {
-  background-size: 200% auto;
-  animation: gradient-shift 5s ease infinite;
+/* Node Network Background Animations - Optimized */
+.node-network-container {
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
-/* Glass morphism effect */
-.glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.node-network-svg {
+  animation: node-network-rotate 30s linear infinite;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
-/* Floating animation for crypto particles */
-@keyframes float {
+.node-network-line {
+  animation: pulse-line 3s ease-in-out infinite;
+  transform: translate3d(0, 0, 0);
+}
+
+.node-network-main {
+  animation: node-glow 4s ease-in-out infinite;
+  transform: translate3d(0, 0, 0);
+}
+
+.node-network-core {
+  animation: node-core-pulse 2.5s ease-in-out infinite;
+  transform: translate3d(0, 0, 0);
+}
+
+@keyframes node-network-rotate {
+  0% {
+    transform: rotate(0deg) translate3d(0, 0, 0);
+  }
+  100% {
+    transform: rotate(360deg) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes node-glow {
   0%, 100% {
-    transform: translateY(0px) translateX(0px);
-    opacity: 0.3;
+    opacity: 0.7;
   }
   50% {
-    transform: translateY(-30px) translateX(10px);
+    opacity: 1;
+  }
+}
+
+@keyframes node-core-pulse {
+  0%, 100% {
     opacity: 0.8;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2) translate3d(0, 0, 0);
   }
 }
 
-/* Pulse glow effect */
-@keyframes pulse-glow {
+@keyframes pulse-line {
   0%, 100% {
-    opacity: 0.3;
-    transform: scale(1);
+    opacity: 0.2;
   }
   50% {
-    opacity: 0.6;
-    transform: scale(1.1);
+    opacity: 0.5;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node-network-svg,
+  .node-network-line,
+  .node-network-main,
+  .node-network-core {
+    animation: none !important;
+  }
+}
+
+/* Legacy turbine animations (kept for backward compatibility) */
+@keyframes turbine-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Extra fast turbine rotation for loading screen */
+@keyframes turbine-rotate-fast {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.turbine-logo {
+  animation: turbine-rotate 18s linear infinite;
+  will-change: transform;
+  filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.65));
+}
+
+.turbine-wrapper {
+  position: relative;
+  width: 260px;
+  height: 260px;
+}
+
+.turbine-core {
+  width: 260px;
+  height: 260px;
+  border-radius: 9999px;
+  object-fit: cover;
+  display: block;
+  position: absolute;
+  inset: 0;
+  /* Percepat putaran kipas: kecilkan durasi (mis. 1.5s, 1s, dll.) */
+  animation: turbine-rotate 2.7s linear infinite;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  filter: none;
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  -ms-interpolation-mode: bicubic;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.turbine-center {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  transform: translateZ(0);
+  width: 70px;
+  height: 70px;
+  border-radius: 9999px;
+  object-fit: contain;
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  -ms-interpolation-mode: bicubic;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.turbine-loading-fast {
+  animation: turbine-rotate-fast 0.7s linear infinite;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turbine-logo,
+  .turbine-core {
+    animation: none !important;
+  }
+  
+  /* Disable node network animations for reduced motion */
+  circle[style*="animation"],
+  line[style*="animation"] {
+    animation: none !important;
+  }
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
 }
 
 .animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
+  animation: pulse-glow 2s infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 3s linear infinite;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  background-size: 1000px 100%;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-mining-pulse {
+  animation: mining-pulse 2s ease-in-out infinite;
+}
+
+.animate-number-count {
+  animation: number-count 0.5s ease-out;
+}
+
+.crypto-gradient {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(101, 205, 170, 0.1) 100%);
+  background-size: 200% 200%;
+  animation: gradient-shift 5s ease infinite;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(251, 191, 36, 0.5);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(251, 191, 36, 0.8);
+}
+
+/* Hide Scrollbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Snap scrolling for tab navigation */
+.snap-x {
+  scroll-snap-type: x mandatory;
+}
+
+.snap-mandatory {
+  scroll-snap-type: x mandatory;
+}
+
+.snap-start {
+  scroll-snap-align: start;
+}
+
+/* Optimize animations for mobile performance */
+@media (max-width: 640px) {
+  /* Reduce animation complexity on mobile */
+  .animate-shimmer,
+  .animate-pulse {
+    animation-duration: 2s;
+  }
+  
+  /* Disable heavy effects on mobile */
+  * {
+    will-change: auto;
+  }
+}
+
+/* Smooth scrolling for tab navigation */
+.tab-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Additional utility classes for enhanced UI */
+
+/* Image Sharpness - HD Quality */
+img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: auto;
+  -ms-interpolation-mode: bicubic;
+  image-rendering: high-quality;
+}
+
+/* HD Quality for PNG/SVG */
+img[src*=".png"],
+img[src*=".svg"],
+img[src*=".jpg"],
+img[src*=".jpeg"],
+img[src*=".webp"] {
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  -ms-interpolation-mode: bicubic;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* HD Background Images */
+div[style*="backgroundImage"] {
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  -ms-interpolation-mode: bicubic;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Auth Panel HD - No Blur */
+.auth-panel {
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  image-rendering: -webkit-optimize-contrast !important;
+  image-rendering: crisp-edges !important;
+  -ms-interpolation-mode: nearest-neighbor !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Responsive Image Container */
+.responsive-image-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.responsive-image-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  -ms-interpolation-mode: bicubic;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }

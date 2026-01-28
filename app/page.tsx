@@ -1,121 +1,123 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
-import { LandingPage } from "@/components/landing-page"
-import { WalletDashboard } from "@/components/wallet-dashboard"
-import { MobileWallet } from "@/components/mobile-wallet"
-import { useAuth } from "@/contexts/auth-context"
-import { Loader2 } from "lucide-react"
-import { useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import MiningDashboard from "@/components/mining-dashboard"
+import LoginForm from "@/components/auth/login-form"
+import { getUserById } from "@/lib/supabase-client"
+import NodeNetworkBackground from "@/components/node-network-background"
 
-function HomeContent() {
-  const { user, loading } = useAuth()
-  const searchParams = useSearchParams()
-  const [isMobile, setIsMobile] = useState(false)
-  const [screenSize, setScreenSize] = useState({ width: 0, height: 0 })
+interface User {
+  id: string
+  email: string
+  username?: string | null
+  usdt_balance: number
+  bxt_balance: number
+  referral_code: string
+  created_at: string
+  is_admin?: boolean
+}
 
+export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Check if user is already logged in on mount
   useEffect(() => {
-    // Store referral code from URL if present
-    const refCode = searchParams.get('ref')
-    if (refCode) {
-      localStorage.setItem('referral_code', refCode)
+    const loadUser = async () => {
+      const storedUserId = localStorage.getItem("bxt_user_id")
+      if (storedUserId) {
+        try {
+          const userData = await getUserById(storedUserId)
+          if (userData) {
+            setUser({
+              id: userData.id,
+              email: userData.email,
+              username: (userData as any).username || null,
+              usdt_balance: Number(userData.usdt_balance),
+              bxt_balance: Number(userData.bxt_balance),
+              referral_code: userData.referral_code,
+              created_at: userData.created_at,
+              is_admin: (userData as any).is_admin || false,
+            })
+            setIsAuthenticated(true)
+          } else {
+            // User not found in database (migrated from old Supabase)
+            localStorage.removeItem("bxt_user_id")
+          }
+        } catch (error) {
+          // Only log actual errors, not "not found" cases
+          if (error && typeof error === 'object' && 'code' in error && error.code !== 'PGRST116') {
+            console.error("Failed to load user:", error)
+          }
+          localStorage.removeItem("bxt_user_id")
+        }
+      }
+      setIsLoading(false)
     }
-  }, [searchParams])
-
-  useEffect(() => {
-    // Detect mobile and screen size
-    const checkMobile = () => {
-      const width = window.innerWidth
-      const height = window.innerHeight
-      setScreenSize({ width, height })
-      setIsMobile(width <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
-    }
-
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    window.addEventListener('orientationchange', checkMobile)
-
-    return () => {
-      window.removeEventListener('resize', checkMobile)
-      window.removeEventListener('orientationchange', checkMobile)
-    }
+    loadUser()
   }, [])
 
-  if (loading) {
+  const handleLogin = (userData: User) => {
+    setUser(userData)
+    setIsAuthenticated(true)
+    localStorage.setItem("bxt_user_id", userData.id)
+  }
+
+  const handleLogout = () => {
+    setIsAuthenticated(false)
+    setUser(null)
+    localStorage.removeItem("bxt_user_id")
+  }
+
+  const updateUserBalance = async (newBalance: number) => {
+    if (user) {
+      try {
+        const updatedUser = await getUserById(user.id)
+        if (updatedUser) {
+          const updated = {
+            ...user,
+            usdt_balance: Number(updatedUser.usdt_balance),
+            bxt_balance: Number(updatedUser.bxt_balance),
+          }
+          setUser(updated)
+        }
+      } catch (error) {
+        console.error("Failed to update balance:", error)
+      }
+    }
+  }
+
+  if (isLoading) {
     return (
-      <div 
-        className="flex items-center justify-center bg-gradient-to-br from-[#0d1020] via-[#0b0e11] to-[#04060d] relative overflow-hidden" 
-        style={{ 
-          height: '100dvh', 
-          width: '100vw',
-          minHeight: '100dvh'
-        }}
-      >
-        {/* Ambient gradient blobs */}
-        <div className="absolute -top-24 -left-20 w-64 h-64 bg-[#7c5dff]/30 blur-[120px] pointer-events-none" />
-        <div className="absolute -bottom-16 -right-12 w-56 h-56 bg-[#ff4d8f]/25 blur-[110px] pointer-events-none" />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-72 h-72 bg-[#12d6ff]/10 blur-[140px] pointer-events-none" />
-        <Loader2 className="w-8 h-8 animate-spin text-white relative z-10" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-52 h-52 mx-auto rounded-full flex items-center justify-center mb-4">
+            <NodeNetworkBackground
+              size={208}
+              showCenterLogo={true}
+              centerLogoUrl="/pi/pinetwork.png"
+              className="node-network-loading"
+            />
+          </div>
+        </div>
       </div>
     )
   }
 
-  if (!user) {
-    return <LandingPage />
+  if (!isAuthenticated || !user) {
+    return <LoginForm onLogin={handleLogin} />
   }
 
-  // Use mobile wallet for mobile-first design - Full screen viewport with responsive sizing
-  const maxWidth = isMobile ? '100%' : '390px'
-  const containerStyle = {
-    height: '100dvh',
-    maxHeight: '100dvh',
-    width: '100vw',
-    maxWidth: maxWidth,
-    overflow: 'hidden',
-    position: 'fixed' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    margin: isMobile ? '0' : '0 auto',
-  }
-
+  // Regular users see mining dashboard (full-screen, tanpa Navbar lama)
+  // Admins should go to /admin route
   return (
-    <div 
-      className="bg-gradient-to-br from-[#0d1020] via-[#0b0e11] to-[#04060d] relative overflow-hidden"
-      style={{ 
-        minHeight: '100dvh',
-        width: '100vw',
-        height: '100dvh'
-      }}
-    >
-      {/* Ambient gradient blobs for outer background */}
-      <div className="fixed -top-24 -left-20 w-96 h-96 bg-[#7c5dff]/20 blur-[140px] pointer-events-none z-0" />
-      <div className="fixed -bottom-16 -right-12 w-80 h-80 bg-[#ff4d8f]/15 blur-[130px] pointer-events-none z-0" />
-      <div className="fixed top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-[#12d6ff]/8 blur-[150px] pointer-events-none z-0" />
-      
-      <div style={containerStyle} className="relative z-10">
-        <MobileWallet />
-      </div>
+    <div className="min-h-screen bg-background">
+      <MiningDashboard
+        user={user}
+        onUpdateBalance={updateUserBalance}
+        onLogout={handleLogout}
+      />
     </div>
-  )
-}
-
-export default function Home() {
-  return (
-    <Suspense fallback={
-      <div 
-        className="flex items-center justify-center bg-gradient-to-br from-[#0d1020] via-[#0b0e11] to-[#04060d] relative overflow-hidden" 
-        style={{ 
-          height: '100dvh', 
-          width: '100vw',
-          minHeight: '100dvh'
-        }}
-      >
-        <Loader2 className="w-8 h-8 animate-spin text-white relative z-10" />
-      </div>
-    }>
-      <HomeContent />
-    </Suspense>
   )
 }
